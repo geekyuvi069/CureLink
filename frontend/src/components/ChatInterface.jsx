@@ -38,7 +38,12 @@ const ChatInterface = () => {
     };
 
     return (
-        <div className="plain-chat">
+        <>
+            <div className="chat-header">
+                <div className="status-dot"></div>
+                <h1>CureLink Assistant</h1>
+            </div>
+
             <div className="messages-list">
                 {messages.map((msg, idx) => (
                     <div key={idx} className={`message ${msg.role}`}>
@@ -51,20 +56,35 @@ const ChatInterface = () => {
                         </div>
                     </div>
                 ))}
-                {isLoading && <div className="loading">...</div>}
+
+                {isLoading && (
+                    <div className="loading-dots">
+                        <div className="dot"></div>
+                        <div className="dot"></div>
+                        <div className="dot"></div>
+                    </div>
+                )}
                 <div ref={messagesEndRef} />
             </div>
+
             <div className="input-area">
                 <input
                     type="text"
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                    placeholder="Type here..."
+                    placeholder="Type your health concern here..."
+                    disabled={isLoading}
                 />
-                <button onClick={handleSend} disabled={isLoading || !input.trim()}>Send</button>
+                <button
+                    onClick={handleSend}
+                    disabled={isLoading || !input.trim()}
+                    className="send-button"
+                >
+                    {isLoading ? 'Sending...' : 'Send'}
+                </button>
             </div>
-        </div>
+        </>
     );
 };
 
