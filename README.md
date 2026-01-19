@@ -81,5 +81,34 @@ The project includes a robust set of 20 seeded doctors including:
 ...and more.
 
 ## Note on Architecture
-*   **Authentication**: Simplified for "One-Page" access as per user requirements (Guest ID: 1).
 *   **Notifications**: Currently configured for Slack (Webhook).
+
+## 📡 API Usage Summary
+The backend exposes the following endpoints (via Facade Pattern):
+
+### 1. Chat Interaction
+**Endpoint:** `POST /api/chat`
+**Description:** Main entry point for the AI agent. Handles intent recognition, tool calling, and response generation.
+```bash
+curl -X POST "http://localhost:8000/api/chat" \
+     -H "Content-Type: application/json" \
+     -d '{
+           "message": "Find me a dentist",
+           "session_id": "test-session-1",
+           "user_role": "patient"
+         }'
+```
+
+### 2. Run Database Migrations
+**Endpoint:** `POST /api/admin/db-init`
+**Description:** Manually triggers database schema creation and doctor seeding.
+```bash
+curl -X POST "http://localhost:8000/api/admin/db-init"
+```
+
+### 3. Health Check
+**Endpoint:** `GET /health`
+**Description:** Verifies system status.
+```bash
+curl "http://localhost:8000/health"
+```
