@@ -9,9 +9,22 @@ from app.core.config import settings
 
 async def get_doctor_by_name(session: AsyncSession, name: str) -> Optional[Doctor]:
     """Helper to find a doctor by fuzzy name matching."""
-    # Simple case-insensitive search for now
+    # Try exact match first (case-insensitive)
     result = await session.execute(select(Doctor).where(Doctor.name.ilike(f"%{name}%")))
-    return result.scalars().first()
+    doctor = result.scalars().first()
+    
+    if doctor:
+        return doctor
+    
+    # If no match, try matching just the last name
+    # e.g., "Dr. Smith" should match "Dr. Sarah Smith"
+    name_parts = name.split()
+    if len(name_parts) >= 2:
+        last_name = name_parts[-1]
+        result = await session.execute(select(Doctor).where(Doctor.name.ilike(f"%{last_name}%")))
+        return result.scalars().first()
+    
+    return None
 
 async def check_doctor_availability(
     doctor_name: str,
@@ -188,8 +201,13 @@ async def book_appointment(
             msg += " Confirmation email sent successfully."
 
         # --- Slack Notification ---
-        # Notify the doctor about the new appointment
-        notification_msg = f"New Appointment Booked!\nPatient: {patient_name}\nTime: {appt_time.strftime('%Y-%m-%d %H:%M')}\nReason: {reason or 'Not specified'}"
+        # Notify the doctor about the new appointment in a structured way
+        notification_msg = (
+            f"*New appointment scheduled!*\n"
+            f"• *Patient:* {patient_name}\n"
+            f"• *Time:* {appt_time.strftime('%Y-%m-%d %H:%M')}\n"
+            f"• *Reason:* {reason or 'Not specified'}"
+        )
         await send_doctor_notification(doctor_name, notification_msg)
 
         return {
@@ -284,9 +302,64 @@ async def send_doctor_notification(
             "timestamp": datetime.now().isoformat()
         }
 
+    # Premium Slack Payload Design
+    # We use 'attachments' to get the colored sidebar (blue for info) which feels more 'premium'
+    # than just plain blocks.
+    
+    # Simple logic to split message into an intro and body if possible
+    lines = message.strip().split('\n')
+    intro = lines[0] if lines else "New Update"
+    body = "\n".join(lines[1:]) if len(lines) > 1 else ""
+
     payload = {
-        "text": f"*Doctor Notification*\nTo: {doctor_name}\nMessage: {message}"
+        "attachments": [
+            {
+                "color": "#36a64f", # Health green
+                "blocks": [
+                    {
+                        "type": "header",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "🏥 MediAssist Professional",
+                            "emoji": True
+                        }
+                    },
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"*Hello {doctor_name},*\n{intro}"
+                        }
+                    }
+                ]
+            }
+        ]
     }
+
+    if body:
+        payload["attachments"][0]["blocks"].append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": body
+            }
+        })
+
+    # Add footer context
+    payload["attachments"][0]["blocks"].extend([
+        {
+            "type": "divider"
+        },
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"📅 *Issued:* {datetime.now().strftime('%b %d, %Y | %H:%M')}  •  🤖 *AI Assistant*"
+                }
+            ]
+        }
+    ])
 
     try:
         async with httpx.AsyncClient() as client:
@@ -313,6 +386,31 @@ async def list_doctors(specialization: Optional[str] = None) -> Dict[str, Any]:
     Lists all available doctors, optionally filtering by specialization.
     """
     async with AsyncSessionLocal() as session:
+        # Map common terms to medical specializations
+        specialization_map = {
+            "heart": "Cardiologist",
+            "heart doctor": "Cardiologist",
+            "cardiac": "Cardiologist",
+            "tooth": "Dentist",
+            "dental": "Dentist",
+            "teeth": "Dentist",
+            "bone": "Orthopedic",
+            "skin": "Dermatologist",
+            "eye": "Ophthalmologist",
+            "brain": "Neurologist",
+            "child": "Pediatrician",
+            "kids": "Pediatrician",
+            "baby": "Pediatrician",
+        }
+        
+        # Convert common terms to medical specialization
+        if specialization:
+            spec_lower = specialization.lower()
+            for key, value in specialization_map.items():
+                if key in spec_lower:
+                    specialization = value
+                    break
+        
         stmt = select(Doctor)
         if specialization:
             stmt = stmt.where(Doctor.specialization.ilike(f"%{specialization}%"))
@@ -325,3 +423,4 @@ async def list_doctors(specialization: Optional[str] = None) -> Dict[str, Any]:
                 for d in doctors
             ]
         }
+
