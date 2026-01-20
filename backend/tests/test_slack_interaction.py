@@ -7,7 +7,12 @@ import time
 import os
 
 # Try to load the secret from .env if available, or use a default for testing
-SLACK_SIGNING_SECRET = "d04e7a12945879e992e0d9536caa1094" # From .env
+# Try to load the secret from env
+from app.core.config import settings
+SLACK_SIGNING_SECRET = settings.SLACK_SIGNING_SECRET
+if not SLACK_SIGNING_SECRET:
+    print("Warning: SLACK_SIGNING_SECRET not set. Using dummy value for test generation, but backend verification might fail if configured with a different secret.")
+    SLACK_SIGNING_SECRET = "dummy_secret_for_testing"
 
 async def test_mock_slack_event():
     url = "http://localhost:8000/api/slack/events"
